@@ -8,14 +8,80 @@ class ContinuumArmedBandit:
         self.y = y
         self.gpr = GPR(self.X, self.y, convergence_rate=convergence_rate)
         self.N = self.X.shape[0]
+        self.alpha = None
+        self.gamma = None
 
     def select_action(self):
         K = self.gpr.K
         noise_var = self.gpr.noise_var
-        alpha = self.calc_alpha(K, noise_var, self.y)
-        gamma = self.calc_gamma(K, noise_var, self.X)
-        return (alpha, gamma)
+        self.alpha = self.calc_alpha(K, noise_var, self.y)
+        self.gamma = self.calc_gamma(K, noise_var, self.X)
+        x = self.get_x_best(self.X)
+        return x
+        
+    def get_x_best(self, X):
+        merit_best = 0
+        x_best = None
+        for j in range(self.N):
+            x = X[j]
+            for i in range(10):
+                #s = self.get_s(x, X)
+                x = x + x
+            x_merit = self.get_merit(x, X)
+            if x_merit > merit_best:
+                x_best = x
+                merit_best = x_merit
+        return x_best
+
+    def get_s(self, x, X):
+        der_mean = self.get_derivative_mean(x, X)
+        der_std = self.get_derivative_std(x, X)
+        s = der_mean + der_std
     
+    def get_derivative_std(self, x, X):
+        der_std = 0
+        W = self.gpr.W
+        k_prime = self.gpr.k
+        std = self.get_std(x, X)
+        for i in range(self.N):
+            for j in range(self.N):
+                der_std += (2.0 / std) * self.gamma[i,j] * W.dot((X[i] + X[j]) / 2.0 - x) * k_prime(x, (X[i] + X[j]) / 2.0) 
+        return der_std
+
+
+    def get_derivative_mean(self, x, X):
+        der_mean = 0
+        W = self.gpr.W
+        k = self.gpr.k
+        for i in range(self.N):
+            der_mean += W.dot(X[i] - x) * k(x, X[i]) * self.alpha[i]
+        return der_mean
+
+
+    def get_merit(self, x, X):
+        mean = self.get_mean(x, X)
+        var = self.get_std(x, X)
+        merit = mean + var
+        return merit
+
+    def get_mean(self, x, X):
+        mean = 0
+        k = self.gpr.k
+        for j in range(self.N):
+            mean += k(x,X[j]) * self.alpha[j]
+        return mean
+
+    def get_std(self, x, X):
+        k = self.gpr.k
+        k_prime = self.gpr.k_prime
+        kxx = k(x,x)
+        a = 0
+        for i in range(self.N):
+            for j in range(self.N):
+                a += k_prime(x, 0.5 * (X[i] + X[j])) * self.gamma[i,j]
+        var = np.sqrt(kxx - a)
+        return var
+        
     def calc_alpha(self, K, noise_var, y):
         alpha = np.linalg.inv((K + noise_var * np.eye(self.N))).dot(y)
         return alpha
