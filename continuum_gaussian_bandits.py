@@ -25,7 +25,7 @@ class ContinuumArmedBandit:
         for j in range(self.N):
             x = X[j]
             for i in range(10):
-                #s = self.get_s(x, X)
+                s = self.get_s(x, X)
                 x = x + x
             x_merit = self.get_merit(x, X)
             if x_merit > merit_best:
@@ -37,6 +37,7 @@ class ContinuumArmedBandit:
         der_mean = self.get_derivative_mean(x, X)
         der_std = self.get_derivative_std(x, X)
         s = der_mean + der_std
+        return s
     
     def get_derivative_std(self, x, X):
         der_std = 0
@@ -104,6 +105,13 @@ class ContinuumArmedBandit:
         beta_x1x2 = np.exp(-0.25 * (x1 - x2).T.dot(W).dot(x1 - x2))
         return beta_x1x2
 
+    def get_q_mean(self, x, X):
+        q_mean = 0
+        kpp = self.gpr.k_prime_prime
+        for i in range(self.N):
+            q_mean += np.absolute(kpp(x, X[i])) * self.alpha[i]
+        return q_mean
+
 class GPR(GaussianProcessRegressor):
     def __init__(self, X, y, convergence_rate=1.0):
         self.X = X
@@ -159,5 +167,7 @@ class GPR(GaussianProcessRegressor):
     def k_prime(self, x1, x2):
         k_prime_x1x2 = self.converge_rate_sq * np.exp(-1.0 * (x1 - x2).T.dot(self.W).dot(x1 - x2))
         return k_prime_x1x2
-            
-    
+             
+    def k_prime_prime(self, x1, x2):
+        k_prime_prime_x1x2 = self.converge_rate_sq * np.exp(-1.0/6.0 * (x1 - x2).T.dot(self.W).dot(x1 - x2))
+        return k_prime_prime_x1x2
